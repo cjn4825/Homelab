@@ -1,0 +1,17 @@
+---
+- name: Add HashiCorp Vault repo to dnf
+
+  ansible.builtin.get_url:
+    url: https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+    dest: /etc/yum.repos.d/hashicorp.repo
+    mode: '0644'
+
+- name: Install packages
+  ansible.builtin.dnf:
+    name:
+      - vault
+      - freeipa-client
+      - firewalld
+      - python3-firewall
+    state: present
+    update_cache: true

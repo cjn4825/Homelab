@@ -1,0 +1,7 @@
+---
+- name: Deploy and configure IPA client on host
+  hosts: localhost
+  connection: local
+
+  roles:
+    - ipa_host_configure

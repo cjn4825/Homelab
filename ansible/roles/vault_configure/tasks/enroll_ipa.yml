@@ -1,0 +1,15 @@
+---
+- name: Enroll into ipa domain
+  ansible.builtin.command: >
+    ipa-client-install --unattended
+    --mkhomedir
+    --enable-dns-updates
+    --principal={{ ipa_principal }}
+    --password="{{ ipa_admin_password }}"
+    --force-join
+  args:
+    creates: /etc/ipa/default.conf
+
+- name: Ensure system-wide trust store updated with FreeIPA CA
+  ansible.builtin.command: update-ca-trust
+  delegate_to: localhost

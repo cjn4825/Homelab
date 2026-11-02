@@ -1,0 +1,24 @@
+---
+- name: Ensure IPA client packages are installed
+  ansible.builtin.dnf:
+    name:
+      - freeipa-client
+    state: present
+  delegate_to: localhost
+  run_once: true
+
+- name: Execute automated FreeIPA client enrollment
+  ansible.builtin.command: >
+    ipa-client-install --unattended
+    --principal={{ ipa_principal }}
+    --password={{ ipa_admin_password }}
+    --force-join
+    --mkhomedir
+  delegate_to: localhost
+  no_log: true
+  args:
+    creates: /etc/ipa/default.conf
+
+- name: Ensure system-wide trust store updated with FreeIPA CA
+  ansible.builtin.command: update-ca-trust extract
+  delegate_to: localhost

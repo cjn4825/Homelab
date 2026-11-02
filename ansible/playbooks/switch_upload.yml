@@ -1,6 +1,0 @@
----
-- name: Upload switch config to vault server
-  hosts: localhost
-
-  roles:
-    - switch_upload

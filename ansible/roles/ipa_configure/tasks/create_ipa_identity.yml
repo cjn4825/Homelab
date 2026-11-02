@@ -1,0 +1,112 @@
+---
+- name: Create Infrastructure Admin Group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "infra_admins"
+    description: "Infrastructure administrators group"
+    state: present
+
+- name: Create Infrastructure Admin User
+  freeipa.ansible_freeipa.ipauser:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "infra_admin"
+    first: "Infra"
+    last: "Admin"
+    password: "{{ infra_admin_pass }}"
+    sshpubkey:
+      - "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    state: present
+
+- name: Add infra_admin to infra_admins group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "infra_admins"
+    user:
+      - "infra_admin"
+    action: member
+    state: present
+
+- name: Create Music Server Admin Group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "music-admins"
+    description: "Music Server administrators group"
+    state: present
+
+- name: Create Music Server Admin User
+  freeipa.ansible_freeipa.ipauser:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "music_admin"
+    first: "Music"
+    last: "Admin"
+    password: "{{ music_admin_pass }}"
+    state: present
+
+- name: Add music_admin to music-admins group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "music-admins"
+    user:
+      - "music_admin"
+    action: member
+    state: present
+
+- name: Restrict default allow_all HBAC rule to administrative groups only
+  freeipa.ansible_freeipa.ipahbacrule:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "allow_all"
+    group:
+      - "admins"
+      - "infra_admins"
+    usercategory: ""
+    state: present
+
+- name: Create HBAC rule allowing infra_admins to access all infra hosts
+  freeipa.ansible_freeipa.ipahbacrule:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "access-infra-admins-all"
+    description: "Allow infra-admins group access to all cluster nodes"
+    group:
+      - "infra_admins"
+    hostcategory: "all"
+    servicecategory: "all"
+    state: present
+
+# have automated later on?
+# - name: Create HBAC rule restricting music_admins to musicsrv.home.lab
+#   freeipa.ansible_freeipa.ipahbacrule:
+#     ipaadmin_password: "{{ ipa_admin_password }}"
+#     name: "access-music-admins-restricted"
+#     description: "Restrict music_admins to the music server only"
+#     group:
+#       - "music_admins"
+#     host:
+#       - "musicsrv.home.lab"
+#     servicecategory: "all"
+#     state: present
+
+- name: Create global sudo rule allowing infra_admins full root access
+  freeipa.ansible_freeipa.ipasudorule:
+    ipaadmin_password: "{{ ipa_admin_password }}"
+    name: "sudo-infra-admins-all"
+    description: "Grant full sudo privileges to infra_admins across all hosts"
+    group:
+      - "infra_admins"
+    hostcategory: "all"
+    cmdcategory: "all"
+    runasusercategory: "all"
+    state: present
+
+# same here where this will be configured later on
+# - name: Create targeted sudo rule for music_admins on the music server only
+#   freeipa.ansible_freeipa.ipasudorule:
+#     ipaadmin_password: "{{ ipa_admin_password }}"
+#     name: "sudo-music-admins-restricted"
+#     description: "Grant sudo privileges to music_admins on musicsrv.home.lab"
+#     group:
+#       - "music_admins"
+#     host:
+#       - "musicsrv.home.lab"
+#     cmdcategory: "all"
+#     runasusercategory: "all"
+#     state: present

@@ -1,0 +1,9 @@
+---
+- name: Shutdown lab
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  roles:
+    - shutdown

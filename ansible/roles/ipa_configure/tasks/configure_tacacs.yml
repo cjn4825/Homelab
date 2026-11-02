@@ -1,0 +1,61 @@
+---
+- name: Ensure EPEL repository is enabled
+  ansible.builtin.dnf:
+    name: epel-release
+    state: present
+
+- name: Install tacacs daemon
+  ansible.builtin.dnf:
+    name:
+      - tacacs
+    state: present
+    update_cache: true
+
+- name: Ensure TACACS+ system group exists
+  ansible.builtin.group:
+    name: tacacs
+    system: true
+    state: present
+
+- name: Ensure TACACS+ system user exists
+  ansible.builtin.user:
+    name: tacacs
+    group: tacacs
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+    comment: "TACACS+ daemon service user"
+    state: present
+
+- name: Ensure TACACS configuration and log dirs exist with correct ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: tacacs
+    group: tacacs
+    mode: '0750'
+  loop:
+    - /etc/tacacs
+    - /var/log/tacacs
+
+- name: Deploy tac_plus configuration file with PAM and group mapping
+  ansible.builtin.template:
+    src: tacacs.conf.j2
+    dest: /etc/tac_plus.conf
+    owner: tacacs
+    group: tacacs
+    mode: '0640'
+
+- name: Copy PAM configurations for TACACS+
+  ansible.builtin.copy:
+    src: pam.conf
+    dest: /etc/pam.d/tac_plus
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and start tac_plus service
+  ansible.builtin.systemd:
+    name: tac_plus
+    state: started
+    enabled: true

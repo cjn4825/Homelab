@@ -1,0 +1,27 @@
+---
+- name: Disable root SSH login
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PermitRootLogin\s+'
+    line: 'PermitRootLogin no'
+    state: present
+    validate: 'sshd -t -f %s'
+  notify: Restart sshd
+
+- name: Disable password-based SSH authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PasswordAuthentication\s+'
+    line: 'PasswordAuthentication no'
+    state: present
+    validate: 'sshd -t -f %s'
+  notify: Restart sshd
+
+- name: Ensure public key authentication is enabled
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*PubkeyAuthentication\s+'
+    line: 'PubkeyAuthentication yes'
+    state: present
+    validate: 'sshd -t -f %s'
+  notify: Restart sshd

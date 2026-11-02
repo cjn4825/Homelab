@@ -1,6 +1,0 @@
----
-- name: REBOOT SERVERS
-  hosts: value  # update to give in an argument instead
-
-  roles:
-    - server_reboot

@@ -1,0 +1,9 @@
+---
+- name: Configure Cisco 3650 switch via NETCONF
+  connection: ansible.netcommon.network_cli
+  hosts: switch.home.lab
+  vars_files:
+    - ../vars/switch_config.yml
+
+  roles:
+    - switch_configure

@@ -5,4 +5,4 @@
 **/.terraform/
 
 *.tfvars
-secrets.auto.tfvars
+shared_secrets.tfvars

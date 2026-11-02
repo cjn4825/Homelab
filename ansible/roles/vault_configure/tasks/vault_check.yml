@@ -1,0 +1,15 @@
+---
+- name: Check if Vault is already configured
+  ansible.builtin.stat:
+    path: /etc/vault.d/vault.hcl
+  register: vault_config
+
+- name: Skip remaining tasks if Vault is installed
+  block:
+    - name: Print message
+      ansible.builtin.debug:
+        msg: "Vault is already installed. Skipping remaining tasks."
+
+    - name: End playbook for this host
+      ansible.builtin.meta: end_host
+  when: vault_config.stat.exists

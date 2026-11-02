@@ -1,0 +1,7 @@
+---
+- name: Mapping FQDN in /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    line: "10.10.20.5 ipa.home.lab ipa"
+    insertbefore: BOF
+    state: present

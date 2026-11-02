@@ -1,0 +1,42 @@
+---
+- name: Run unattended FreeIPA server installation
+  command: >
+    ipa-server-install --unattended
+    --realm={{ ipa_realm }}
+    --domain={{ ipa_domain }}
+    --ds-password={{ ipa_ds_password }}
+    --admin-password={{ ipa_admin_password }}
+    --setup-dns
+    --auto-forwarders
+
+- name: Define custom BIND ACLs in ipa-ext.conf
+  copy:
+    src: ipa-ext.conf
+    dest: /etc/named/ipa-ext.conf
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Configure query and recursion restrictions in ipa-options-ext.conf
+  copy:
+    src: ipa-options-ext.conf
+    dest: /etc/named/ipa-options-ext.conf
+    owner: root
+    group: named
+    mode: '0640'
+
+- name: Ensure BIND DNS service is restarted to apply extension configs
+  ansible.builtin.systemd:
+    name: named
+    state: restarted
+
+- name: Allow subnets to query chrony
+  ansible.builtin.lineinfile:
+    path: /etc/chrony.conf
+    line: "allow 10.10.0.0/16"
+    state: present
+
+- name: Restart chronyd service
+  ansible.builtin.systemd:
+    name: chronyd
+    state: restarted

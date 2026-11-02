@@ -15,6 +15,8 @@ IPA_PLAYBOOK="$REPO_ROOT/ansible/playbooks/ipa_configure.yml"
 VAULT_PLAYBOOK="$REPO_ROOT/ansible/playbooks/vault_configure.yml"
 TIER_ZERO="$REPO_ROOT/terraform/tier-0-infra"
 TIER_ONE="$REPO_ROOT/terraform/tier-1-infra"
+DEV="$REPO_ROOT/terraform/dev-infra"
+SECRETS="$REPO_ROOT/terraform/shared_secrets.tfvars"
 
 print_help() {
     echo "Usage: $0 [--ipa | --vault] [--init | --conf | --destroy]"
@@ -22,6 +24,7 @@ print_help() {
     echo "Components:"
     echo "  --ipa       Target Tier 0 (FreeIPA Infrastructure)"
     echo "  --vault     Target Tier 1 (HashiCorp Vault Infrastructure)"
+    echo "  --dev       Target Tier 2 (Dev Infrastructure)"
     echo ""
     echo "Actions:"
     echo "  --init      Provision infrastructure via Terraform and wait for SSH daemon"
@@ -31,7 +34,7 @@ print_help() {
     echo "Examples:"
     echo "  $0 --ipa --init"
     echo "  $0 --vault --conf"
-    echo "  $0 --vault --destroy"
+    echo "  $0 --dev --destroy"
     exit 0
 }
 
@@ -44,8 +47,9 @@ ACTION=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --ipa) COMPONENT="ipa"; shift ;;
-        --vault) COMPONENT="vault"; shift ;;
+        ipa) COMPONENT="ipa"; shift ;;
+        vault) COMPONENT="vault"; shift ;;
+        dev) COMPONENT="dev"; shift ;;
         --init) ACTION="init"; shift ;;
         --conf) ACTION="conf"; shift ;;
         --destroy) ACTION="destroy"; shift ;;
@@ -55,7 +59,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 if [ -z "$COMPONENT" ] || [ -z "$ACTION" ]; then
-    echo "Error: You must specify both a component (--ipa or --vault) and an action (--init, --conf, --destroy)."
+    echo "Error: You must specify both a component (ipa or vault) and an action (--init, --conf, --destroy)."
     echo "Run '$0 --help' for usage details."
     exit 1
 fi
@@ -70,12 +74,19 @@ elif [ "$COMPONENT" == "vault" ]; then
     TARGET_IP="10.10.20.6"
     ANSIBLE_PLAYBOOK="$VAULT_PLAYBOOK"
     HOST_DESC="Vault host"
+elif [ "$COMPONENT" == "dev" ]; then
+    TF_DIR="$DEV"
+    TARGET_IP="10.10.20.30"
+    ANSIBLE_PLAYBOOK=""
+    HOST_DESC="Dev host"
 fi
 
 case $ACTION in
     init)
         echo "Provisioning $COMPONENT HomeLab Infra..."
-        terraform -chdir="$TF_DIR" apply -auto-approve
+        terraform -chdir="$TF_DIR" apply \
+            -var-file="$SECRETS" \
+            -auto-approve
 
         echo "Waiting for SSH Daemon on $HOST_DESC ($TARGET_IP)..."
         while ! nc -zv "$TARGET_IP" 22 2>/dev/null; do
@@ -84,16 +95,24 @@ case $ACTION in
         echo "$HOST_DESC is online and reachable via SSH."
         ;;
     conf)
-        echo "Remoting into $HOST_DESC for configuration..."
-        ANSIBLE_CONFIG="$CONF" ansible-playbook \
-            -i "$INVENTORY" \
-            "$ANSIBLE_PLAYBOOK" \
-            --ask-vault-pass
-        echo "Configuration Complete."
+        if [ "$COMPONENT" == "dev" ]; then
+            echo "No Ansible playbook for Dev host. Skipping..."
+        else
+            echo "Remoting into $HOST_DESC for configuration..."
+            ANSIBLE_CONFIG="$CONF" ansible-playbook \
+                -i "$INVENTORY" \
+                "$ANSIBLE_PLAYBOOK" \
+                --ask-vault-pass
+
+            echo "Configuration Complete."
+        fi
         ;;
     destroy)
         echo "Tearing down $COMPONENT HomeLab Infra..."
-        terraform -chdir="$TF_DIR" destroy -auto-approve
+        terraform -chdir="$TF_DIR" destroy \
+            -var-file="$SECRETS" \
+            -auto-approve
+
         echo "Teardown Complete."
         ;;
 esac

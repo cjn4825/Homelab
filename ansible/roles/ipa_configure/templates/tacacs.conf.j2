@@ -1,0 +1,21 @@
+accounting file = /var/log/tacacs/tac_plus.acct
+key = "{{ tacacs_secret }}"
+
+group = infra_admins {
+    default service = permit
+    service = exec {
+        priv-lvl = 15
+    }
+}
+
+user = infra_admin {
+    member = infra_admins
+    login = PAM
+}
+
+user = DEFAULT {
+    login = PAM
+    service = exec {
+        priv-lvl = 1
+    }
+}

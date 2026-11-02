@@ -1,0 +1,68 @@
+---
+switch_hostname: "Switch-Core-01"
+switch_domain: "home.lab"
+default_gateway: "10.10.30.1"
+
+vlans:
+  - id: 10
+    name: "SERVER-VLAN"
+    ip_address: "10.10.60.1"
+    subnet_mask: "255.255.255.0"
+  - id: 20
+    name: "PROXMOX-VLAN"
+    ip_address: "10.10.20.1"
+    subnet_mask: "255.255.255.0"
+  - id: 30
+    name: "MANAGEMENT-VLAN"
+    ip_address: "10.10.50.1"
+    subnet_mask: "255.255.255.0"
+  - id: 99
+    name: "SHUTDOWN-VLAN"
+    ip_address: ""
+
+interfaces:
+  - name: "GigabitEthernet1/0/1"
+    description: "Access Port to SWITCH - MANAGEMENT VLAN"
+    mode: "access"
+    vlan: 30
+    shutdown: false
+  - name: "GigabitEthernet1/0/9"
+    description: "Access Port to IDRAC - MANAGEMENT VLAN"
+    mode: "access"
+    vlan: 30
+    shutdown: false
+  - name: "GigabitEthernet1/0/14"
+    description: "Access Port - PROXMOX VLAN"
+    mode: "access"
+    vlan: 20
+    shutdown: false
+  - name: "GigabitEthernet1/0/17"
+    description: "Access Port to Pi1 - SERVER VLAN"
+    mode: "access"
+    vlan: 10
+    shutdown: false
+  - name: "GigabitEthernet1/0/19"
+    description: "Access Port to Pi2 - SERVER VLAN"
+    mode: "access"
+    vlan: 10
+    shutdown: false
+  - name: "GigabitEthernet1/0/21"
+    description: "Access Port to Pi3 - SERVER VLAN"
+    mode: "access"
+    vlan: 10
+    shutdown: false
+  - name: "GigabitEthernet1/0/23"
+    description: "Access Port to Pi4 - SERVER VLAN"
+    mode: "access"
+    vlan: 10
+    shutdown: false
+  - name: "GigabitEthernet1/1/1"
+    description: "Uplink to WAP"
+    no_switchport: true
+    ip_address: "10.10.30.1"
+    subnet_mask: "255.255.255.252"
+    shutdown: false
+
+tacacs_servers:
+  - address: "10.10.20.5"
+    key: "{{ tacacs_secret }}"

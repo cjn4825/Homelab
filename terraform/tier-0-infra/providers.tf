@@ -16,7 +16,6 @@ terraform {
 provider "proxmox" {
   endpoint  = "https://${local.device["proxmox"].socket}/"
   api_token = var.proxmox_api_token
-  insecure  = true
 
   ssh {
     username = "root"
@@ -28,5 +27,5 @@ provider "freeipa" {
   username = "admin"
   password = var.ipa_password
   host     = local.device["ipa"].ip
-  insecure = true
+  # insecure = true
 }

@@ -16,7 +16,6 @@ terraform {
 provider "proxmox" {
   endpoint  = "https://${local.device["proxmox"].socket}/"
   api_token = var.proxmox_api_token
-  insecure  = true
 
   ssh {
     username = "root"

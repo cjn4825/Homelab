@@ -1,0 +1,15 @@
+---
+- name: Check if FreeIPA is already configured
+  ansible.builtin.stat:
+    path: /etc/ipa/default.conf
+  register: ipa_config
+
+- name: Skip remaining tasks if FreeIPA is installed
+  block:
+    - name: Print message
+      ansible.builtin.debug:
+        msg: "FreeIPA is already installed. Skipping remaining tasks."
+
+    - name: End playbook for this host
+      ansible.builtin.meta: end_host
+  when: ipa_config.stat.exists

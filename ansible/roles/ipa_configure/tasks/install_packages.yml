@@ -1,0 +1,10 @@
+---
+- name: Install packages
+  ansible.builtin.dnf:
+    name:
+      - freeipa-server
+      - freeipa-server-dns
+      - firewalld
+      - python3-firewall
+    state: present
+    update_cache: true

@@ -1,0 +1,157 @@
+---
+- name: Configure Authorized Access Banner
+  cisco.ios.ios_config:
+    lines:
+      - banner motd ^C
+        =================================================================
+        AUTHORIZED ACCESS ONLY. All connections are monitored and logged.
+        Disconnect immediately if you are not an authorized administrator.
+        =================================================================
+        ^C
+
+- name: Ensure NETCONF service is enabled on the device
+  cisco.ios.ios_netconf:
+    state: started
+
+- name: Ensure Rapid-PVST Spanning Tree Mode is Enabled
+  cisco.ios.ios_config:
+    lines:
+      - spanning-tree mode rapid-pvst
+      - spanning-tree extend system-id
+
+- name: Configure Global System Parameters (Hostname & Domain)
+  cisco.ios.ios_system:
+    hostname: "{{ switch_hostname }}"
+    domain_name: "{{ switch_domain }}"
+    lookup_enabled: false
+
+- name: Configure Default Gateway
+  cisco.ios.ios_config:
+    lines:
+      - "ip route 0.0.0.0 0.0.0.0 {{ default_gateway }}"
+
+- name: Configure Switch Security and Management Hardening
+  cisco.ios.ios_config:
+    lines:
+      - no ip http server
+      - no ip http secure-server
+      - ip ssh version 2
+      - line vty 0 15
+      - transport input ssh
+      - exec-timeout 15 0
+      - login authentication default
+      - exit
+      - line con 0
+      - exec-timeout 15 0
+
+- name: Configure Local Admin Account for TACACS+ Fallback
+  cisco.ios.ios_config:
+    lines:
+      - username {{ switch_user }} privilege 15 secret 9 "{{ switch_pass }}"
+
+- name: Configure VLAN Database
+  cisco.ios.ios_vlans:
+    config:
+      - vlan_id: "{{ item.id }}"
+        name: "{{ item.name }}"
+        state: active
+    state: overridden
+  loop: "{{ vlans }}"
+
+- name: Configure Layer 3 SVI Interfaces
+  cisco.ios.ios_interfaces:
+    config:
+      - name: "Vlan{{ item.id }}"
+        description: "SVI for {{ item.name }}"
+        enabled: true
+    state: merged
+  loop: "{{ vlans }}"
+  when: item.ip_address is defined and item.ip_address | length > 0
+
+- name: Configure SVI IP Addresses
+  cisco.ios.ios_l3_interfaces:
+    config:
+      - name: "Vlan{{ item.id }}"
+        ipv4:
+          - address: "{{ item.ip_address }}"
+            netmask: "{{ item.subnet_mask }}"
+    state: merged
+  loop: "{{ vlans }}"
+  when: item.ip_address is defined and item.ip_address | length > 0
+
+- name: Configure Switchports
+  cisco.ios.ios_l2_interfaces:
+    config:
+      - name: "{{ item.name }}"
+        mode: "{{ item.mode | default(omit) }}"
+        access:
+          vlan: "{{ item.vlan | default(omit) }}"
+    state: merged
+  loop: "{{ interfaces }}"
+  when: item.no_switchport is not defined
+
+- name: Enforce Spanning-Tree Edge Security on Server Access Ports
+  cisco.ios.ios_config:
+    lines:
+      - >-
+        interface range
+        GigabitEthernet1/0/17,
+        GigabitEthernet1/0/18,
+        GigabitEthernet1/0/19,
+        GigabitEthernet1/0/21,
+        GigabitEthernet1/0/23
+      - spanning-tree portfast
+      - spanning-tree bpduguard enable
+
+- name: Configure Physical Layer 3 Interfaces
+  cisco.ios.ios_l3_interfaces:
+    config:
+      - name: "{{ item.name }}"
+        ipv4:
+          - address: "{{ item.ip_address }}"
+            netmask: "{{ item.subnet_mask }}"
+    state: overridden
+  loop: "{{ interfaces }}"
+  when: item.no_switchport is defined and item.no_switchport == true
+
+- name: Configure AAA and TACACS+ Integration with FreeIPA Server
+  cisco.ios.ios_config:
+    lines:
+      - aaa new-model
+      - aaa authentication login default group tacacs+ local
+      - aaa authorization exec default group tacacs+ local
+      - tacacs-server host 10.10.20.5
+      - tacacs-server key {{ tacacs_secret }}
+
+- name: Move and Shutdown Unused Ports in VLAN 99
+  cisco.ios.ios_config:
+    lines:
+      - >-
+        interface range
+        GigabitEthernet1/0/2-8,
+        GigabitEthernet1/0/10-13,
+        GigabitEthernet1/0/15-16,
+        GigabitEthernet1/0/20,
+        GigabitEthernet1/0/22,
+        GigabitEthernet1/0/24
+      - shutdown
+      - switchport mode access
+      - switchport access vlan 99
+
+- name: Configure NTP Sever
+  cisco.ios.ios_config:
+    lines:
+      - ntp server 10.10.20.5
+      - clock timezone UTC 0 0
+
+# logging - will be implemented in the future
+# - name: Configure Syslog Forwarding
+#   cisco.ios.ios_config:
+#     lines:
+#       - logging host 10.10.20.X
+#       - logging trap informational
+#       - no logging console
+
+- name: Save Running Configuration to Startup-Config if Changes Were Made
+  cisco.ios.ios_config:
+    save_when: modified

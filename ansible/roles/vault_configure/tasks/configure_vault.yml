@@ -1,0 +1,145 @@
+---
+- name: Ensure Vault data directory exists with correct permissions
+  ansible.builtin.file:
+    path: /opt/vault/data
+    state: directory
+    owner: vault
+    group: vault
+    mode: '0750'
+
+- name: Write base Vault configuration
+  ansible.builtin.copy:
+    src: vault.conf
+    dest: /etc/vault.d/vault.hcl
+    mode: '0640'
+    owner: vault
+    group: vault
+
+- name: restart and enable Vault service
+  ansible.builtin.systemd:
+    name: vault
+    state: restarted
+    enabled: true
+
+- name: Ensure local keys directory exists on control node
+  ansible.builtin.file:
+    path: "{{ local_keys_dir }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  run_once: true
+  become: false
+
+- name: Initialize Vault
+  ansible.builtin.command: vault operator init -format=json
+  register: vault_init_result
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+  no_log: true
+
+- name: Save Vault keys and root token securely to control node
+  ansible.builtin.copy:
+    content: "{{ vault_init_result.stdout }}"
+    dest: "{{ local_keys_dir }}/{{ inventory_hostname }}_keys.json"
+    mode: '0600'
+  delegate_to: localhost
+  no_log: true
+  become: false
+
+- name: Load Vault keys from control node into memory
+  ansible.builtin.set_fact:
+    vault_data: >-
+      {{ lookup('file', local_keys_dir ~ '/' ~
+         inventory_hostname ~ '_keys.json') | from_json }}
+  no_log: true
+
+- name: Unseal Vault using required threshold keys
+  ansible.builtin.command: "vault operator unseal {{ item }}"
+  loop: "{{ vault_data.unseal_keys_b64[:3] }}"
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+  no_log: true
+
+- name: Verify Vault is unsealed
+  ansible.builtin.command: vault status -format=json
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+  register: final_vault_status
+  changed_when: false
+
+- name: Display unseal status confirmation
+  ansible.builtin.debug:
+    msg: >-
+      Vault is operational. Sealed status is
+      {{ (final_vault_status.stdout | from_json).sealed }}
+
+- name: Enable LDAP auth method in Vault
+  ansible.builtin.command: vault auth enable ldap
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"
+  register: enable_ldap
+  failed_when:
+    - enable_ldap.rc != 0
+    - "'path is already in use' not in enable_ldap.stderr"
+  changed_when: enable_ldap.rc == 0
+
+- name: Copy FreeIPA CA certificate for Vault LDAPS trust
+  ansible.builtin.copy:
+    src: /etc/ipa/ca.crt
+    dest: /etc/vault.d/ca.crt
+    remote_src: true
+    owner: vault
+    group: vault
+    mode: '0644'
+
+- name: Configure Vault LDAPS auth backend for FreeIPA
+  ansible.builtin.command: >
+    vault write auth/ldap/config
+      url="ldaps://ipa.home.lab:636"
+      userdn="cn=users,cn=accounts,dc=home,dc=lab"
+      userattr="uid"
+      groupdn="cn=groups,cn=accounts,dc=home,dc=lab"
+      groupattr="cn"
+      binddn="uid=admin,cn=users,cn=accounts,dc=home,dc=lab"
+      bindpass="{{ ipa_admin_password }}"
+      ca_cert="/etc/vault.d/ca.crt"
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"
+  no_log: true
+
+- name: Create an administrative policy in Vault
+  ansible.builtin.shell: |
+    vault policy write admin - <<EOF
+    path "*" {
+      capabilities = ["create", "read", "update", "delete", "list", "sudo"]
+    }
+    EOF
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"
+
+- name: Map admins group to the Vault admin policy
+  ansible.builtin.command: >
+    vault write auth/ldap/groups/infra_admins policies=admin
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"
+
+- name: Enable KV v2 secrets engine at secret/ path
+  ansible.builtin.command: vault secrets enable -path=secret -version=2 kv-v2
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"
+  register: enable_kv
+  failed_when:
+    - enable_kv.rc != 0
+    - "'path is already in use' not in enable_kv.stderr"
+  changed_when: enable_kv.rc == 0
+
+- name: Seal Vault
+  ansible.builtin.command: vault operator seal
+  environment:
+    VAULT_ADDR: "http://127.0.0.1:8200"
+    VAULT_TOKEN: "{{ vault_data.root_token }}"

@@ -1,0 +1,13 @@
+---
+- name: Proxmox node shutdown via API Script
+  ansible.builtin.command: python ../roles/shutdown/files/shutdown.py
+  environment:
+    PVE_API_HEADER: "{{ proxmox_api_header }}"
+    PVE_CERT: "{{ proxmox_cert }}"
+  delegate_to: localhost
+  become: false
+  register: script_output
+
+- name: Display script execution output
+  ansible.builtin.debug:
+    var: script_output.stdout_lines

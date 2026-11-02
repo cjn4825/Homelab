@@ -1,242 +1,28 @@
 ---
-- name: Check if FreeIPA is already configured
-  ansible.builtin.stat:
-    path: /etc/ipa/default.conf
-  register: ipa_config
 
-- name: Skip remaining tasks if FreeIPA is installed
-  block:
-    - name: Print message
-      ansible.builtin.debug:
-        msg: "FreeIPA is already installed. Skipping remaining tasks."
+- name: Include ipa_check task
+  ansible.builtin.include_tasks: ipa_check.yml
 
-    - name: End playbook for this host
-      ansible.builtin.meta: end_host
-  when: ipa_config.stat.exists
+- name: Include ssh_harden task
+  ansible.builtin.include_tasks: ssh_harden.yml
 
-- name: Disable root SSH login
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PermitRootLogin\s+'
-    line: 'PermitRootLogin no'
-    state: present
-    validate: 'sshd -t -f %s'
-  notify: Restart sshd
+- name: Include configure_qemu_agent task
+  ansible.builtin.include_tasks: configure_qemu_agent.yml
 
-- name: Disable password-based SSH authentication
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PasswordAuthentication\s+'
-    line: 'PasswordAuthentication no'
-    state: present
-    validate: 'sshd -t -f %s'
-  notify: Restart sshd
+- name: Include hosts_file task
+  ansible.builtin.include_tasks: hosts_file.yml
 
-- name: Ensure public key authentication is enabled
-  ansible.builtin.lineinfile:
-    path: /etc/ssh/sshd_config
-    regexp: '^#?\s*PubkeyAuthentication\s+'
-    line: 'PubkeyAuthentication yes'
-    state: present
-    validate: 'sshd -t -f %s'
-  notify: Restart sshd
+- name: Include install_packages task
+  ansible.builtin.include_tasks: install_packages.yml
 
-- name: Enable and start qemu-guest-agent service
-  ansible.builtin.systemd:
-    name: qemu-guest-agent
-    enabled: true
-    state: started
+- name: Include configure_ipa task
+  ansible.builtin.include_tasks: configure_ipa.yml
 
-- name: Mapping FQDN in /etc/hosts
-  ansible.builtin.lineinfile:
-    path: /etc/hosts
-    line: "10.10.20.5 ipa.home.lab ipa"
-    insertbefore: BOF
-    state: present
+- name: Include configure_firewalld task
+  ansible.builtin.include_tasks: configure_firewalld.yml
 
-- name: Install packages
-  ansible.builtin.dnf:
-    name:
-      - freeipa-server
-      - freeipa-server-dns
-      - firewalld
-      - python3-firewall
-    state: present
-    update_cache: true
+- name: Include create_ipa_identity task
+  ansible.builtin.include_tasks: create_ipa_identity.yml
 
-- name: Run unattended FreeIPA server installation
-  command: >
-    ipa-server-install --unattended
-    --realm={{ ipa_realm }}
-    --domain={{ ipa_domain }}
-    --ds-password={{ ipa_ds_password }}
-    --admin-password={{ ipa_admin_password }}
-    --setup-dns
-    --auto-forwarders
-
-- name: Define custom BIND ACLs in ipa-ext.conf
-  copy:
-    src: ipa-ext.conf
-    dest: /etc/named/ipa-ext.conf
-    owner: root
-    group: named
-    mode: '0640'
-
-- name: Configure query and recursion restrictions in ipa-options-ext.conf
-  copy:
-    src: ipa-options-ext.conf
-    dest: /etc/named/ipa-options-ext.conf
-    owner: root
-    group: named
-    mode: '0640'
-
-- name: Ensure BIND DNS service is restarted to apply extension configs
-  ansible.builtin.systemd:
-    name: named
-    state: restarted
-
-- name: Allow subnets to query chrony
-  ansible.builtin.lineinfile:
-    path: /etc/chrony.conf
-    line: "allow 10.10.0.0/16"
-    state: present
-
-- name: Restart chronyd service
-  ansible.builtin.systemd:
-    name: chronyd
-    state: restarted
-
-- name: Ensure firewalld service is started and enabled
-  ansible.builtin.systemd:
-    name: firewalld
-    state: started
-    enabled: true
-
-- name: Ensure firewalld allows FreeIPA and DNS services
-  ansible.builtin.firewalld:
-    service: "{{ item }}"
-    permanent: true
-    state: enabled
-    immediate: true
-  loop:
-    - http
-    - https
-    - dns
-    - ntp
-    - kerberos
-    - kpasswd
-    - ldap
-    - ldaps
-    - freeipa-4
-
-- name: Create Infrastructure Admin Group
-  freeipa.ansible_freeipa.ipagroup:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "infra-admins"
-    description: "Infrastructure administrators group"
-    state: present
-
-- name: Create Infrastructure Admin User
-  freeipa.ansible_freeipa.ipauser:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "infra_admin"
-    first: "Infra"
-    last: "Admin"
-    password: "{{ infra_admin_pass }}"
-    sshpubkey:
-      - "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
-    state: present
-
-- name: Add infra_admin to infra-admins group
-  freeipa.ansible_freeipa.ipagroup:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "infra-admins"
-    user:
-      - "infra_admin"
-    action: member
-    state: present
-
-- name: Create Music Server Admin Group
-  freeipa.ansible_freeipa.ipagroup:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "music-admins"
-    description: "Music Server administrators group"
-    state: present
-
-- name: Create Music Server Admin User
-  freeipa.ansible_freeipa.ipauser:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "music_admin"
-    first: "Music"
-    last: "Admin"
-    password: "{{ music_admin_pass }}"
-    state: present
-
-- name: Add music_admin to music-admins group
-  freeipa.ansible_freeipa.ipagroup:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "music-admins"
-    user:
-      - "music_admin"
-    action: member
-    state: present
-
-- name: Restrict default allow_all HBAC rule to administrative groups only
-  freeipa.ansible_freeipa.ipahbacrule:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "allow_all"
-    group:
-      - "admins"
-      - "infra-admins"
-    usercategory: ""
-    state: present
-
-- name: Create HBAC rule allowing infra-admins to access all infra hosts
-  freeipa.ansible_freeipa.ipahbacrule:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "access-infra-admins-all"
-    description: "Allow infra-admins group access to all cluster nodes"
-    group:
-      - "infra-admins"
-    hostcategory: "all"
-    servicecategory: "all"
-    state: present
-
-# have automated later on?
-# - name: Create HBAC rule restricting music_admins to musicsrv.home.lab
-#   freeipa.ansible_freeipa.ipahbacrule:
-#     ipaadmin_password: "{{ ipa_admin_password }}"
-#     name: "access-music-admins-restricted"
-#     description: "Restrict music_admins to the music server only"
-#     group:
-#       - "music_admins"
-#     host:
-#       - "musicsrv.home.lab"
-#     servicecategory: "all"
-#     state: present
-
-- name: Create global sudo rule allowing infra-admins full root access
-  freeipa.ansible_freeipa.ipasudorule:
-    ipaadmin_password: "{{ ipa_admin_password }}"
-    name: "sudo-infra-admins-all"
-    description: "Grant full sudo privileges to infra-admins across all hosts"
-    group:
-      - "infra-admins"
-    hostcategory: "all"
-    cmdcategory: "all"
-    runasusercategory: "all"
-    state: present
-
-# same here where this will be configured later on
-# - name: Create targeted sudo rule for music_admins on the music server only
-#   freeipa.ansible_freeipa.ipasudorule:
-#     ipaadmin_password: "{{ ipa_admin_password }}"
-#     name: "sudo-music-admins-restricted"
-#     description: "Grant sudo privileges to music_admins on musicsrv.home.lab"
-#     group:
-#       - "music_admins"
-#     host:
-#       - "musicsrv.home.lab"
-#     cmdcategory: "all"
-#     runasusercategory: "all"
-#     state: present
+- name: Include configure_tacacs task
+  ansible.builtin.include_tasks: configure_tacacs.yml

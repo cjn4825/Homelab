@@ -1,0 +1,20 @@
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    proxmox = {
+      source = "bpg/proxmox"
+      version = "0.117.0"
+    }
+  }
+}
+
+provider "proxmox" {
+  endpoint  = "https://${local.device["proxmox"].socket}/"
+  api_token = var.proxmox_api_token
+
+  ssh {
+    username = "root"
+    agent = true
+  }
+}

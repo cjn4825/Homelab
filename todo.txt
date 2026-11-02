@@ -1,0 +1,30 @@
+create playbook from openscap then add to dev config to see if breaks
+
+
+
+make a base config with management info and ssh key and hostname
+then save it somewhere
+make sure switch playbook works test it
+
+create playbook to auto add pem file to laptop and update-ca-trust extract
+test if additons work such as internal certs
+
+enforce MFA - add to resume?
+
+create aws account setup and get key store in terraform file
+
+terraform s3
+
+find best method to store and backup images: also in s3?
+
+terraform secrets encryption
+vault encryption for json in ~/keys/ folder
+
+research how gitops could work
+
+find method to implement p4  server best: pxe boot
+
+siem for central loggin only
+
+create large vm's for nodes and automate creating the nodes as well
+main siem with performance profiler project...use talos for the OS

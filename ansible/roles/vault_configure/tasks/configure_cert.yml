@@ -1,0 +1,26 @@
+---
+- name: Ensure certmonger service is enabled and running
+  ansible.builtin.service:
+    name: certmonger
+    state: started
+    enabled: true
+
+- name: Check if certmonger is already tracking the Vault certificate
+  ansible.builtin.command: ipa-getcert list -f /etc/vault.d/tls/vault.crt
+  register: certmonger_status
+  changed_when: false
+  failed_when: false
+
+- name: Request and manage FreeIPA certificate for Vault via certmonger
+  ansible.builtin.command: >
+    ipa-getcert request
+    -f /etc/vault.d/tls/vault.crt
+    -k /etc/vault.d/tls/vault.key
+    -D {{ inventory_hostname }}
+    -g 2048
+    -o vault
+    -m 0600
+    -O vault
+    -M 0644
+    -C "systemctl restart vault"
+  when: certmonger_status.rc != 0
